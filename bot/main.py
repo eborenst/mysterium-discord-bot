@@ -18,23 +18,24 @@ async def on_ready():
 @bot.event
 async def on_member_join(member):
 	guild = member.guild
-	print(f"User {member.display_name} ({member.name}) joined server {guild.name}.")
+	print(f"User '{member.display_name}' joined server '{guild.name}'.")
 
 	statusChannel = discord.utils.get(guild.text_channels, name=_status_messages_channel)
-	await statusChannel.send(f"Hey! {member.display_name} ({member.mention}) just joined the server!")
+	await statusChannel.send(f"Hey! {member.mention} just joined the server!")
 
 
 @bot.event
 async def on_member_update(before, after):
 	if before.pending == True and after.pending == False:
-		print(f"User {after.display_name} ({after.name}) in server {guild.name} went through screening. Applying {_default_user_role} role.")
-
 		guild = after.guild
-		statusChannel = discord.utils.get(guild.text_channels, name=_status_messages_channel)
-		await statusChannel.send(f"We would have given {after.display_name} ({after.mention}) a permission right now if we were active.")
+		print(f"User '{after.display_name}' ({after.name}) in server '{guild.name}' went through screening. Applying '{_default_user_role}' role.")
 
-		#role = discord.utils.get(after.guild.roles, name=_default_user_role)
-		#await after.add_roles(role, reason = "Completed member screening.")
+		role = discord.utils.get(after.guild.roles, name=_default_user_role)
+		await after.add_roles(role, reason = "Completed member screening.")
+
+		statusChannel = discord.utils.get(guild.text_channels, name=_status_messages_channel)
+		await statusChannel.send(f"{after.mention} completed screening and was given the '{_default_user_role}' role!.")
+		print(f"Gave role '{_default_user_role}' to user '{after.display_name}'.")
 
 
 
