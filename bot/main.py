@@ -34,7 +34,7 @@ async def on_member_update(before, after):
 		await after.add_roles(role, reason = "Completed member screening.")
 
 		statusChannel = discord.utils.get(guild.text_channels, name=_status_messages_channel)
-		await statusChannel.send(f"{after.mention} completed screening and was given the '{_default_user_role}' role!.")
+		await statusChannel.send(f"{after.mention} completed screening and was given the '{_default_user_role}' role!")
 		print(f"Gave role '{_default_user_role}' to user '{after.display_name}'.")
 
 
