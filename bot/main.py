@@ -3,7 +3,7 @@ import discord
 from discord.ext import commands
 
 _default_user_role = "Guildsman"
-_status_messages_channel = "moderator-only"
+_status_messages_channel = "bot-messages"
 
 intents = discord.Intents.default()
 intents.members = True
