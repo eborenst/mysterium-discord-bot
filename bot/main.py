@@ -17,9 +17,9 @@ async def on_ready():
 
 @bot.event
 async def on_member_join(member):
+	guild = member.guild
 	print(f"User {member.display_name} ({member.id}) joined server {guild.name}.")
 
-	guild = member.guild
 	statusChannel = discord.utils.get(guild.text_channels, name=_status_messages_channel)
 	await statusChannel.send("Hey! {member.display_name} ({member.id}) just joined the server!")
 
