@@ -21,7 +21,7 @@ async def on_member_join(member):
 	print(f"User {member.display_name} ({member.name}) joined server {guild.name}.")
 
 	statusChannel = discord.utils.get(guild.text_channels, name=_status_messages_channel)
-	await statusChannel.send(f"Hey! {member.display_name} ({member.name}) just joined the server!")
+	await statusChannel.send(f"Hey! {member.display_name} ({member.mention}) just joined the server!")
 
 
 @bot.event
@@ -31,7 +31,7 @@ async def on_member_update(before, after):
 
 		guild = after.guild
 		statusChannel = discord.utils.get(guild.text_channels, name=_status_messages_channel)
-		await statusChannel.send(f"We would have given {member.display_name} a permission right now if we were active.")
+		await statusChannel.send(f"We would have given {after.display_name} ({after.mention}) a permission right now if we were active.")
 
 		#role = discord.utils.get(after.guild.roles, name=_default_user_role)
 		#await after.add_roles(role, reason = "Completed member screening.")
