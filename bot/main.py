@@ -5,7 +5,10 @@ from discord.ext import commands
 _default_user_role = "Guildsman"
 _status_messages_channel = "moderator-only"
 
-bot = commands.Bot(command_prefix="!")
+intents = discord.Intents.default()
+intents.members = True
+
+bot = commands.Bot(command_prefix = "!", intents = intents)
 TOKEN = os.getenv("DISCORD_TOKEN")
 
 @bot.event
