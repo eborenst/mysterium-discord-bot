@@ -35,7 +35,7 @@ async def on_member_update(before, after):
 		except discord.errors.Forbidden as e:
 			# Send a message to the server about it, and then re-raise it so it gets logged
 			# on the server.
-			print(f"ERROR! Bot got a 'FORBIDDEN' error after trying to grant the '{_default_user_role}' role to '{after.display_name}' ({after.name})! Stack trace to follow:"
+			print(f"ERROR! Bot got a 'FORBIDDEN' error after trying to grant the '{_default_user_role}' role to '{after.display_name}' ({after.name})! Stack trace to follow:")
 			statusChannel = discord.utils.get(guild.text_channels, name=_status_messages_channel)
 			await statusChannel.send(f"ERROR! Bot got a 'FORBIDDEN' error after trying to grant the '{_default_user_role}' role to '{after.mention}'!")
 			raise e
