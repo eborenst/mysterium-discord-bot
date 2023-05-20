@@ -1,0 +1,12 @@
+# fly.toml app configuration file generated for mysterium-test-bot on 2023-05-20T16:48:58-04:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = "mysterium-test-bot"
+kill_signal = "SIGINT"
+kill_timeout = 5
+
+processes = []
+
+[env]
