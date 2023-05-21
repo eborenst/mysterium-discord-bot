@@ -15,6 +15,7 @@ intents.message_content = True
 
 # Create the bot and grab our private key/token from the Heroku environment variables.
 bot = commands.Bot(command_prefix = "$", intents = intents)
+bot = commands.Bot(command_prefix = "!", intents = intents)
 TOKEN = os.getenv("DISCORD_TOKEN")
 
 # For some reason, logs to stdout will not show up in the fly.io console on their v2 platform,
