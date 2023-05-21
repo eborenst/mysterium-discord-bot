@@ -3,6 +3,8 @@ import sys
 import discord
 from discord.ext import commands
 from urllib.request import urlopen
+import csv
+import urllib.error
 
 # ------- CONSTANTS -------
 _default_user_role = "Guildsman" # The role to grant after Member Screening.
@@ -73,7 +75,7 @@ async def ping(ctx):
 	await ctx.send("pong")
 	log(f"Sent a pong for a ping!")
 
-# Pull CSV of discord usernames from mysterium.net and try to apply a specific role to them. 
+# Pull CSV of discord usernames from a user-supplied URL and try to apply a specific role to them.
 @bot.command()
 async def bulkadd(ctx, url):
 	guild = ctx.guild
@@ -97,6 +99,9 @@ async def bulkadd(ctx, url):
 				lines = (line.decode('utf-8') for line in response)
 				# Iterate over each line in the CSV and process
 				for row in csv.reader(lines):
+					# Skip empty lines and the column header from Convention Manager
+					if row == [] or row[0] == 'Discord Username': continue
+					
 					# Split  Username#0000 into two in order to pass them to the Discord disambiguator
 					csvUser=row[0].split("#")
 					# Pass name and, if present, the discriminator (thanks for the "improvement", Discord...)
