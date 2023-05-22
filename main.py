@@ -98,9 +98,11 @@ async def bulkadd(ctx, url):
 		# Pull in the CSV from the user-provided URL
 		with urlopen(url) as response:
 			log("Opened the URL.")
+
 			# Unicode unfuckery
 			lines = (line.decode('utf-8') for line in response)
 			log("Parsed the lines.")
+
 			# Iterate over each line in the CSV and process
 			for row in csv.reader(lines):
 				# Skip empty lines and the column header from Convention Manager
@@ -113,7 +115,6 @@ async def bulkadd(ctx, url):
 				# Pass name and, if present, the discriminator (thanks for the "improvement", Discord...)
 				n = csvUser[0]
 				d = (csvUser[1] if len(csvUser) == 2 else "0")
-				log(f"Name - '{n}' - Discriminator - '{d}'")
 				u = discord.utils.get(users, name = n, discriminator = d)
 
 				if u is None:
@@ -151,6 +152,10 @@ async def bulkadd(ctx, url):
 			uNFMessage = uNFMessage + "\n    " + userNotFound
 		log(uNFMessage)
 		await statusChannel.send(uNFMessage)
+	else:
+		message = "All users were found and were given the role."
+		log(message)
+		await statusChannel.send(message)
 
 	message = "The bulk add mysterium attendee role command has finished."
 	log(message)
