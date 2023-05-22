@@ -30,6 +30,10 @@ def log(x):
 async def on_ready():
 	log(f"Logged in as {bot.user.name}({bot.user.id})")
 
+	for guild in bot.guilds:
+		statusChannel = discord.utils.get(guild.text_channels, name=_status_messages_channel)
+		await statusChannel.send(f"*{bot.user.name} has linked in*")
+
 # Event run whenever a new member joins one of our servers.
 @bot.event
 async def on_member_join(member):
@@ -82,8 +86,7 @@ async def bulkadd(ctx, url):
 	users = guild.members
 	attendeeRole = discord.utils.get(guild.roles, name="Mysterium Onsite")
 	statusChannel = discord.utils.get(guild.text_channels, name=_status_messages_channel)
-	usersNotFound = []
-	
+	usersNotFound = []	
 
 	# If user is Mysterium Staff then,
 	if discord.utils.get(guild.roles, name="Mysterium Staff") in ctx.author.roles:
@@ -95,30 +98,52 @@ async def bulkadd(ctx, url):
 		try:
 			# Pull in the CSV from the user-provided URL
 			with urlopen(url) as response:
+				log("Opened the URL.")
 				# Unicode unfuckery
 				lines = (line.decode('utf-8') for line in response)
+				log("Parsed the lines.")
 				# Iterate over each line in the CSV and process
 				for row in csv.reader(lines):
 					# Skip empty lines and the column header from Convention Manager
 					if row == [] or row[0] == 'Discord Username': continue
-					
+
+					log(f"Working on row: '{row[0]}'")
+
 					# Split  Username#0000 into two in order to pass them to the Discord disambiguator
-					csvUser=row[0].split("#")
+					csvUser = row[0].split("#")
 					# Pass name and, if present, the discriminator (thanks for the "improvement", Discord...)
-					with discord.utils.get(users, name = csvUser[0], discriminator = (csvUser[1] if len(csvUser) == 2 else None)) as u:
-						if u is None:
-							# User as-presented isn't in Members list so 'get' call returned None. Add them to a list to report back later.
-							# TODO: Maybe if name & discriminator fail, try the call again with just name before failing?
-							usersNotFound.append(row[0])
-						else:
-							# User was found in member list so do the needful.
-							#TODO: I think this doesn't fail if the user already has the role? Discord and discord.py docs both don't address this.
-							await u.add_roles(attendeeRole)
+					n = csvUser[0]
+					d = (csvUser[1] if len(csvUser) == 2 else "0")
+					log(f"Name - '{n}' - Discriminator - '{d}'")
+					u = discord.utils.get(users, name = n, discriminator = d)
+
+					if u is None:
+						# User as-presented isn't in Members list so 'get' call returned None. Add them to a list to report back later.
+						# TODO: Maybe if name & discriminator fail, try the call again with just name before failing?
+						usersNotFound.append(row[0])
+					else:
+						# User was found in member list so do the needful.
+						#TODO: I think this doesn't fail if the user already has the role? Discord and discord.py docs both don't address this.
+						await u.add_roles(attendeeRole)
 		except urllib.error.URLError as e:
 			# Oops, did you get the URL right??
-			message = f"Failed retrieving '{url}' with server response '{e.code}'."
+			message = f"Failed retrieving '{url}'.  Aborting...\n Server response was: '{e.code}'."
 			log(message)
 			await statusChannel.send(message)
+			return
+		except ValueError as e:
+			# User passed in something that wasn't valid URL syntax.
+			message = f"Value error - '{url}' probably isn't a valid URL? Aborting...\n Error: '{e}'"
+			log(message)
+			await statusChannel.send(message)
+			return
+		except Exception as e:
+			# Something else happened.
+			message = f"Encountered unknown exception, aborting...\n Error was: '{e}'"
+			log(message)
+			await statusChannel.send(message)
+			raise e
+			return
 
 		# Build a message to report back on failed users and send it:
 		if len(usersNotFound) > 0:
