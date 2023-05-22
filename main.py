@@ -81,6 +81,7 @@ async def ping(ctx):
 
 # Pull CSV of discord usernames from a user-supplied URL and try to apply a specific role to them.
 @bot.command()
+@commands.has_role("Mysterium Staff")
 async def bulkadd(ctx, url):
 	guild = ctx.guild
 	users = guild.members
@@ -88,79 +89,87 @@ async def bulkadd(ctx, url):
 	statusChannel = discord.utils.get(guild.text_channels, name=_status_messages_channel)
 	usersNotFound = []	
 
-	# If user is Mysterium Staff then,
-	if discord.utils.get(guild.roles, name="Mysterium Staff") in ctx.author.roles:
-		# Announce it
-		message = f"User '{ctx.author}' just started the bulk add mysterium attendee role command."
+	# Announce it
+	message = f"User '{ctx.author}' just started the bulk add mysterium attendee role command."
+	log(message)
+	await statusChannel.send(message)
+
+	try:
+		# Pull in the CSV from the user-provided URL
+		with urlopen(url) as response:
+			log("Opened the URL.")
+			# Unicode unfuckery
+			lines = (line.decode('utf-8') for line in response)
+			log("Parsed the lines.")
+			# Iterate over each line in the CSV and process
+			for row in csv.reader(lines):
+				# Skip empty lines and the column header from Convention Manager
+				if row == [] or row[0] == 'Discord Username': continue
+
+				log(f"Working on row: '{row[0]}'")
+
+				# Split  Username#0000 into two in order to pass them to the Discord disambiguator
+				csvUser = row[0].split("#")
+				# Pass name and, if present, the discriminator (thanks for the "improvement", Discord...)
+				n = csvUser[0]
+				d = (csvUser[1] if len(csvUser) == 2 else "0")
+				log(f"Name - '{n}' - Discriminator - '{d}'")
+				u = discord.utils.get(users, name = n, discriminator = d)
+
+				if u is None:
+					# User as-presented isn't in Members list so 'get' call returned None. Add them to a list to report back later.
+					# TODO: Maybe if name & discriminator fail, try the call again with just name before failing?
+					usersNotFound.append(row[0])
+				else:
+					# User was found in member list so do the needful.
+					#TODO: I think this doesn't fail if the user already has the role? Discord and discord.py docs both don't address this.
+					await u.add_roles(attendeeRole)
+	except urllib.error.URLError as e:
+		# Oops, did you get the URL right??
+		message = f"Failed retrieving '{url}'.  Aborting...\n Server response was: '{e.code}'."
+		log(message)
+		await statusChannel.send(message)
+		return
+	except ValueError as e:
+		# User passed in something that wasn't valid URL syntax.
+		message = f"Value error - '{url}' probably isn't a valid URL? Aborting...\n Error: '{e}'"
+		log(message)
+		await statusChannel.send(message)
+		return
+	except Exception as e:
+		# Something else happened.
+		message = f"Encountered unknown exception, aborting...\n Error was: '{e}'"
+		log(message)
+		await statusChannel.send(message)
+		raise e
+		return
+
+	# Build a message to report back on failed users and send it:
+	if len(usersNotFound) > 0:
+		uNFMessage = "The following users were not found in the server:"
+		for userNotFound in usersNotFound:
+			uNFMessage = uNFMessage + "\n    " + userNotFound
+		log(uNFMessage)
+		await statusChannel.send(uNFMessage)
+
+	message = "The bulk add mysterium attendee role command has finished."
+	log(message)
+	await statusChannel.send(message)
+
+# Handle errors for the bulkadd command.
+@bulkadd.error
+async def bulkadd_error(ctx, error):
+	statusChannel = discord.utils.get(ctx.guild.text_channels, name=_status_messages_channel)
+
+	if isinstance(error, commands.MissingRequiredArgument):
+		message = "Error: The `bulkadd` command requires a URL as an argument, but nothing was provided."
+		log(message)
+		await statusChannel.send(message)
+	elif isinstance(error, commands.MissingRole):
+		message = "Error: Only Mysterium Staff can use the `bulkadd` command."
 		log(message)
 		await statusChannel.send(message)
 
-		try:
-			# Pull in the CSV from the user-provided URL
-			with urlopen(url) as response:
-				log("Opened the URL.")
-				# Unicode unfuckery
-				lines = (line.decode('utf-8') for line in response)
-				log("Parsed the lines.")
-				# Iterate over each line in the CSV and process
-				for row in csv.reader(lines):
-					# Skip empty lines and the column header from Convention Manager
-					if row == [] or row[0] == 'Discord Username': continue
-
-					log(f"Working on row: '{row[0]}'")
-
-					# Split  Username#0000 into two in order to pass them to the Discord disambiguator
-					csvUser = row[0].split("#")
-					# Pass name and, if present, the discriminator (thanks for the "improvement", Discord...)
-					n = csvUser[0]
-					d = (csvUser[1] if len(csvUser) == 2 else "0")
-					log(f"Name - '{n}' - Discriminator - '{d}'")
-					u = discord.utils.get(users, name = n, discriminator = d)
-
-					if u is None:
-						# User as-presented isn't in Members list so 'get' call returned None. Add them to a list to report back later.
-						# TODO: Maybe if name & discriminator fail, try the call again with just name before failing?
-						usersNotFound.append(row[0])
-					else:
-						# User was found in member list so do the needful.
-						#TODO: I think this doesn't fail if the user already has the role? Discord and discord.py docs both don't address this.
-						await u.add_roles(attendeeRole)
-		except urllib.error.URLError as e:
-			# Oops, did you get the URL right??
-			message = f"Failed retrieving '{url}'.  Aborting...\n Server response was: '{e.code}'."
-			log(message)
-			await statusChannel.send(message)
-			return
-		except ValueError as e:
-			# User passed in something that wasn't valid URL syntax.
-			message = f"Value error - '{url}' probably isn't a valid URL? Aborting...\n Error: '{e}'"
-			log(message)
-			await statusChannel.send(message)
-			return
-		except Exception as e:
-			# Something else happened.
-			message = f"Encountered unknown exception, aborting...\n Error was: '{e}'"
-			log(message)
-			await statusChannel.send(message)
-			raise e
-			return
-
-		# Build a message to report back on failed users and send it:
-		if len(usersNotFound) > 0:
-			uNFMessage = "The following users were not found in the server:"
-			for userNotFound in usersNotFound:
-				uNFMessage = uNFMessage + "\n    " + userNotFound
-			log(uNFMessage)
-			await statusChannel.send(uNFMessage)
-
-		message = "The bulk add mysterium attendee role command has finished."
-		log(message)
-		await statusChannel.send(message)
-
-	else:
-		message = f"User '{ctx.author}' just tried to run the bulk add mysterium attendee role command, but doesn't have the right permissions."
-		log(message)
-		await statusChannel.send(message)
 
 log("Bot starting...")
 
