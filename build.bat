@@ -1,0 +1,2 @@
+flyctl.exe deploy
+pause
