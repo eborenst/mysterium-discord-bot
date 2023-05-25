@@ -8,31 +8,73 @@ import urllib.error
 
 # ------- CONSTANTS -------
 _default_user_role = "Guildsman" # The role to grant after Member Screening.
+_onsite_user_role = "Mysterium Onsite" # The role used for onsite attendees.
 _status_messages_channel = "bot-messages" # Where to send status messages.
-
-# We need to declare this intent or Discord won't let us change member permissions or access
-# member data.
-intents = discord.Intents.default()
-intents.members = True
-intents.message_content = True
-
-# Create the bot and grab our private key/token from the Heroku environment variables.
-bot = commands.Bot(command_prefix = "!", intents = intents)
-TOKEN = os.getenv("DISCORD_TOKEN")
 
 # For some reason, logs to stdout will not show up in the fly.io console on their v2 platform,
 # but logs to stderr will just show normally. So we'll do that.
 def log(x):
 	print(f"BOT LOG: {x}", file=sys.stderr)
 
-# Event run when the bot starts up.
-@bot.event
-async def on_ready():
-	log(f"Logged in as {bot.user.name}({bot.user.id})")
+# Class for a persistent view for manipulating the Onsite role with buttons.
+# See this example for why we need this - https://github.com/Rapptz/discord.py/blob/master/examples/views/persistent.py
+class PersistentOnsiteRoleView(discord.ui.View):
+	def __init__(self):
+		# Set the timeout to None so it is persistent.
+		super().__init__(timeout=None)
 
-	for guild in bot.guilds:
-		statusChannel = discord.utils.get(guild.text_channels, name=_status_messages_channel)
-		await statusChannel.send(f"*{bot.user.name} has linked in*")
+	@discord.ui.button(label='Receive Notifications', style=discord.ButtonStyle.green, custom_id='PersistentOnsiteRoleView:add_onsite')
+	async def green(self, interaction: discord.Interaction, button: discord.ui.Button):
+		guild = interaction.guild
+		user = interaction.user
+		attendeeRole = discord.utils.get(guild.roles, name=_onsite_user_role)
+
+		if attendeeRole in user.roles:
+			await interaction.response.send_message('You are already receiving notifications.', ephemeral=True)
+		else:
+			await user.add_roles(attendeeRole, reason="User requested via button.")
+			await interaction.response.send_message('You will now receive notifications!', ephemeral=True)
+
+	@discord.ui.button(label='Stop Notifications', style=discord.ButtonStyle.red, custom_id='PersistentOnsiteRoleView:remove_onsite')
+	async def red(self, interaction: discord.Interaction, button: discord.ui.Button):
+		guild = interaction.guild
+		user = interaction.user
+		attendeeRole = discord.utils.get(guild.roles, name=_onsite_user_role)
+
+		if attendeeRole not in user.roles:
+			await interaction.response.send_message('You are not currently receiving notifications.', ephemeral=True)
+		else:
+			await user.remove_roles(attendeeRole, reason="User requested via button.")
+			await interaction.response.send_message('You will no longer receive notifications!', ephemeral=True)
+
+# We need to make a custom bot to override the setup_hook for persistent views.
+class MysteriumBot(commands.Bot):
+	def __init__(self):
+		# We need to declare this intent or Discord won't let us change member permissions or access
+		# member data.
+		intents = discord.Intents.default()
+		intents.members = True
+		intents.message_content = True
+
+		super().__init__(command_prefix=commands.when_mentioned_or('!'), intents=intents)
+
+	async def setup_hook(self) -> None:
+		# Register the persistent view for listening here.
+		# Note that this does not send the view to any message.
+		# In order to do this you need to first send a message with the View.
+		self.add_view(PersistentOnsiteRoleView())
+
+	# Event run when the bot starts up.
+	async def on_ready(self):
+		log(f"Logged in as {bot.user.name}({bot.user.id})")
+
+		for guild in bot.guilds:
+			statusChannel = discord.utils.get(guild.text_channels, name=_status_messages_channel)
+			await statusChannel.send(f"*{bot.user.name} has linked in*")
+
+# Create the bot and grab our private key/token from the Heroku environment variables.
+bot = MysteriumBot()
+TOKEN = os.getenv("DISCORD_TOKEN")
 
 # Event run whenever a new member joins one of our servers.
 @bot.event
@@ -85,7 +127,7 @@ async def ping(ctx):
 async def bulkadd(ctx, url):
 	guild = ctx.guild
 	users = guild.members
-	attendeeRole = discord.utils.get(guild.roles, name="Mysterium Onsite")
+	attendeeRole = discord.utils.get(guild.roles, name=_onsite_user_role)
 	statusChannel = discord.utils.get(guild.text_channels, name=_status_messages_channel)
 	usersNotFound = []	
 
@@ -175,6 +217,11 @@ async def bulkadd_error(ctx, error):
 		log(message)
 		await statusChannel.send(message)
 
+# Display a message and buttons for toggling the Onsite role.
+@bot.command()
+@commands.has_role("Mysterium Staff")
+async def SendOnsiteMsg(ctx):
+	await ctx.send("Use these buttons to start or stop receiving notifications for on-site Mysterium announcements.", view=PersistentOnsiteRoleView())
 
 log("Bot starting...")
 
