@@ -11,7 +11,7 @@ _default_user_role = "Guildsman" # The role to grant after Member Screening.
 _onsite_user_role = "Mysterium Onsite" # The role used for onsite attendees.
 _status_messages_channel = "bot-messages" # Where to send status messages.
 _rules_channel = "rules" # Channel where the rules live.
-_rules_url = "https://mysterium.net/plain-text-rules/"
+_rules_url = "https://mysterium.net/discord-rules/"
 
 # For some reason, logs to stdout will not show up in the fly.io console on their v2 platform,
 # but logs to stderr will just show normally. So we'll do that.
@@ -240,19 +240,7 @@ async def UpdateRules(ctx):
 		# Pull in the CSV from the user-provided URL
 		with urlopen(_rules_url) as response:
 			log("Opened the URL.")
-			rules = response.read().decode('utf-8')
-			await ctx.send(rules)
-			log("Output the rules.")
-
-
-			# TODO
-			# parse for section breaks to indicate multiple messages
-			# stop and toss out an error if a message has too many characters
-			# add a "last updated" message at the bottom
-			# give the ability to test in the current channel, or push to the main rules channel
-			# give the ability to delete existing content in the rules channel
-			# check if it works if the rules channel is made uneditable by onboarding setup
-			
+			rules = response.read().decode('utf-8')			
 	except urllib.error.URLError as e:
 		# Oops, did you get the URL right??
 		message = f"Failed retrieving '{_rules_url}'.  Aborting...\n Server response was: '{e.code}'."
@@ -266,6 +254,36 @@ async def UpdateRules(ctx):
 		await statusChannel.send(message)
 		raise e
 		return
+
+	# Search for the special string at the start of role mentions and replace with what
+	# Discord wants.
+	rules = rules.replace("{@&", "<@&")
+
+	# Split the rules at break points.
+	rules = rules.split("{br}")
+	message = f"Got {len(rules)} chunks of rules."
+	log(message)
+	await ctx.send(message)
+
+	# Check that none of the segments is longer than 2000 characters, which is Discords char limit.
+	for i in range(len(rules)):
+		if len(rules[i]) > 2000:
+			message = f"Rules section {i+1} is {len(rules[i])} characters long, but the limit is 2000 characters. Aborting."
+			log(message)
+			await ctx.send(message)
+			return
+
+	# Post the rules.
+	for r in rules:
+		await ctx.send(r)
+
+	log("Output the rules.")
+
+
+	# TODO
+	# give the ability to test in the current channel, or push to the main rules channel
+	# give the ability to delete existing content in the rules channel
+	# check if it works if the rules channel is made uneditable by onboarding setup
 
 log("Bot starting...")
 
