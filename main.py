@@ -304,7 +304,7 @@ async def UpdateRules(ctx, mode):
 		for r in rules:
 			await rulesChannel.send(r)
 
-		await statusChannel.send(message)
+		await statusChannel.send("Rules posted to rules channel.")
 	else:
 		# Otherwise, just post them to the status channel.
 		await statusChannel.send("---BEGINNING RULES---")
