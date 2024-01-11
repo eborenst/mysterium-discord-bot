@@ -225,15 +225,24 @@ async def bulkadd_error(ctx, error):
 async def SendOnsiteMsg(ctx):
 	await ctx.send("Use these buttons to start or stop receiving notifications for on-site Mysterium announcements.", view=PersistentOnsiteRoleView())
 
+_rules_mode_push = "push"
+_rules_mode_test = "test"
+
 # A command to update the server rules from a plain text post on the blog.
 @bot.command()
 @commands.has_role("Mysterium Staff")
-async def UpdateRules(ctx):
+async def UpdateRules(ctx, mode):
 	guild = ctx.guild
 	statusChannel = discord.utils.get(guild.text_channels, name=_status_messages_channel)
 
+	if mode != _rules_mode_test and mode != _rules_mode_push:
+		message = f"The provided mode, `{mode}`, is not valid. Aborting rules update."
+		log(message)
+		await statusChannel.send(message)
+		return
+
 	message = f"Attempting to download rules from {_rules_url}"
-	await ctx.send(message)
+	await statusChannel.send(message)
 	log(message)
 
 	try:
@@ -263,27 +272,71 @@ async def UpdateRules(ctx):
 	rules = rules.split("{br}")
 	message = f"Got {len(rules)} chunks of rules."
 	log(message)
-	await ctx.send(message)
+	await statusChannel.send(message)
 
 	# Check that none of the segments is longer than 2000 characters, which is Discords char limit.
 	for i in range(len(rules)):
 		if len(rules[i]) > 2000:
 			message = f"Rules section {i+1} is {len(rules[i])} characters long, but the limit is 2000 characters. Aborting."
 			log(message)
-			await ctx.send(message)
+			await statusChannel.send(message)
 			return
 
-	# Post the rules.
-	for r in rules:
-		await ctx.send(r)
+	message = f"All rules chunks are valid."
+	log(message)
+	await statusChannel.send(message)
 
-	log("Output the rules.")
+	# If we're in push mode, clear the rules channel and post there.
+	if mode == _rules_mode_push:
+		log("Grabbing rules channel.")
+		rulesChannel = discord.utils.get(guild.text_channels, name=_rules_channel)
+
+		message = f"Attempting to purge rules channel."
+		log(message)
+		await statusChannel.send(message)
+
+		await rulesChannel.purge()
+
+		message = f"Purge complete, attempting to post to rules channel."
+		log(message)
+		await statusChannel.send(message)
+
+		for r in rules:
+			await rulesChannel.send(r)
+
+		await statusChannel.send(message)
+	else:
+		# Otherwise, just post them to the status channel.
+		await statusChannel.send("---BEGINNING RULES---")
+
+		for r in rules:
+			await statusChannel.send(r)
+
+		await statusChannel.send("---END OF RULES---")
+
+	message = "Rules update complete."
+	log(message)
+	await statusChannel.send(message)
 
 
 	# TODO
-	# give the ability to test in the current channel, or push to the main rules channel
-	# give the ability to delete existing content in the rules channel
 	# check if it works if the rules channel is made uneditable by onboarding setup
+
+# Handle errors for the UpdateRules command.
+@UpdateRules.error
+async def UpdateRules_error(ctx, error):
+	statusChannel = discord.utils.get(ctx.guild.text_channels, name=_status_messages_channel)
+
+	if isinstance(error, commands.MissingRequiredArgument):
+		message = "Error: The `UpdateRules` command requires a mode as an argument."
+		message += f"\n\nMode `{_rules_mode_test}` will output the rules to the #bot-messages channel for testing."
+		message += f"\nMode `{_rules_mode_push}` will clear the #rules channel and output the new rules to that channel."
+		log(message)
+		await statusChannel.send(message)
+	elif isinstance(error, commands.MissingRole):
+		message = "Error: Only Mysterium Staff can use the `UpdateRules` command."
+		log(message)
+		await statusChannel.send(message)
 
 log("Bot starting...")
 
