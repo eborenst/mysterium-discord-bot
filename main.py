@@ -10,6 +10,8 @@ import urllib.error
 _default_user_role = "Guildsman" # The role to grant after Member Screening.
 _onsite_user_role = "Mysterium Onsite" # The role used for onsite attendees.
 _status_messages_channel = "bot-messages" # Where to send status messages.
+_rules_channel = "rules" # Channel where the rules live.
+_rules_url = "https://mysterium.net/plain-text-rules/"
 
 # For some reason, logs to stdout will not show up in the fly.io console on their v2 platform,
 # but logs to stderr will just show normally. So we'll do that.
@@ -222,6 +224,48 @@ async def bulkadd_error(ctx, error):
 @commands.has_role("Mysterium Staff")
 async def SendOnsiteMsg(ctx):
 	await ctx.send("Use these buttons to start or stop receiving notifications for on-site Mysterium announcements.", view=PersistentOnsiteRoleView())
+
+# A command to update the server rules from a plain text post on the blog.
+@bot.command()
+@commands.has_role("Mysterium Staff")
+async def UpdateRules(ctx):
+	guild = ctx.guild
+	statusChannel = discord.utils.get(guild.text_channels, name=_status_messages_channel)
+
+	message = f"Attempting to download rules from {_rules_url}"
+	await ctx.send(message)
+	log(message)
+
+	try:
+		# Pull in the CSV from the user-provided URL
+		with urlopen(_rules_url) as response:
+			log("Opened the URL.")
+			rules = response.read().decode('utf-8')
+			await ctx.send(rules)
+			log("Output the rules.")
+
+
+			# TODO
+			# parse for section breaks to indicate multiple messages
+			# stop and toss out an error if a message has too many characters
+			# add a "last updated" message at the bottom
+			# give the ability to test in the current channel, or push to the main rules channel
+			# give the ability to delete existing content in the rules channel
+			# check if it works if the rules channel is made uneditable by onboarding setup
+			
+	except urllib.error.URLError as e:
+		# Oops, did you get the URL right??
+		message = f"Failed retrieving '{_rules_url}'.  Aborting...\n Server response was: '{e.code}'."
+		log(message)
+		await statusChannel.send(message)
+		return
+	except Exception as e:
+		# Something else happened.
+		message = f"Encountered unknown exception, aborting...\n Error was: '{e}'"
+		log(message)
+		await statusChannel.send(message)
+		raise e
+		return
 
 log("Bot starting...")
 
