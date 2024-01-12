@@ -284,7 +284,7 @@ async def UpdateRules(ctx, mode):
 		return f"<@&{str(roleId.id)}>"
 
 	# Do the regex search/replace.
-	rules = re.sub(r'\{@([\w ]+)\}', doRoleReplace, rules)
+	rules = re.sub(r'\{@(.+?)\}', doRoleReplace, rules)
 
 	# Print out the logs from inside the function.
 	for l in internalLogs:
