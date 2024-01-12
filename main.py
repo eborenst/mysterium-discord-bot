@@ -296,6 +296,25 @@ async def UpdateRules(ctx, mode):
 	# Do the regex search/replace.
 	rules = re.sub(r'\{@(.+?)\}', doRoleReplace, rules)
 
+	# Similar to above, but now we're looking for channel names instead of roles.
+	def doChannelReplace(m):
+		channel = m.group(1)
+
+		# Try to get the channel ID.
+		channelId = discord.utils.get(guild.channels, name=channel)
+
+		if channelId is None:
+			# Didn't find it, so log that and just return the channel name.
+			# We can't make await calls in here, so store the logs for later.
+			internalLogs.append(f"Couldn't find channel with name `{channel}` in this server.")
+			return f"**#{channel}**"
+
+		# We found the channel, so we get the ID and return it with proper formatting.
+		return f"<#{str(channelId.id)}>"
+
+	# Do the regex search/replace.
+	rules = re.sub(r'\{#(.+?)\}', doChannelReplace, rules)
+
 	# Print out the logs from inside the function.
 	for l in internalLogs:
 		log(l)
