@@ -1,5 +1,6 @@
 import os
 import sys
+import re
 import discord
 from discord.ext import commands
 from urllib.request import urlopen
@@ -10,6 +11,8 @@ import urllib.error
 _default_user_role = "Guildsman" # The role to grant after Member Screening.
 _onsite_user_role = "Mysterium Onsite" # The role used for onsite attendees.
 _status_messages_channel = "bot-messages" # Where to send status messages.
+_rules_channel = "rules" # Channel where the rules live.
+_rules_url = "https://mysterium.net/discord-rules/"
 
 # For some reason, logs to stdout will not show up in the fly.io console on their v2 platform,
 # but logs to stderr will just show normally. So we'll do that.
@@ -222,6 +225,170 @@ async def bulkadd_error(ctx, error):
 @commands.has_role("Mysterium Staff")
 async def SendOnsiteMsg(ctx):
 	await ctx.send("Use these buttons to start or stop receiving notifications for on-site Mysterium announcements.", view=PersistentOnsiteRoleView())
+
+_rules_mode_push = "push"
+_rules_mode_test = "test"
+
+# A command to update the server rules from a plain text post on the blog.
+@bot.command()
+@commands.has_role("Mysterium Staff")
+async def UpdateRules(ctx, mode):
+	guild = ctx.guild
+	statusChannel = discord.utils.get(guild.text_channels, name=_status_messages_channel)
+
+	if mode != _rules_mode_test and mode != _rules_mode_push:
+		message = f"The provided mode, `{mode}`, is not valid. Aborting rules update."
+		log(message)
+		await statusChannel.send(message)
+		return
+
+	message = f"Attempting to download rules from {_rules_url}"
+	await statusChannel.send(message)
+	log(message)
+
+	try:
+		# Pull in the CSV from the user-provided URL
+		with urlopen(_rules_url) as response:
+			log("Opened the URL.")
+			rules = response.read().decode('utf-8')			
+	except urllib.error.URLError as e:
+		# Oops, did you get the URL right??
+		message = f"Failed retrieving '{_rules_url}'.  Aborting...\n Server response was: '{e.code}'."
+		log(message)
+		await statusChannel.send(message)
+		return
+	except Exception as e:
+		# Something else happened.
+		message = f"Encountered unknown exception, aborting...\n Error was: '{e}'"
+		log(message)
+		await statusChannel.send(message)
+		raise e
+		return
+
+	message = "Got the rules text. Beginining massaging session."
+	log(message)
+	await statusChannel.send(message)
+
+	# Replace any instances of '{%' with '<', to get around Wordpress being a pain.
+	rules = rules.replace("{%", "<")
+
+	# Now do the same with '%}' and '>'.
+	rules = rules.replace("%}", ">")
+
+	internalLogs = []
+
+	# Use regex to find role names and try to replace them with the role ID syntax.
+	def doRoleReplace(m):
+		role = m.group(1)
+
+		# Try to get the role ID.
+		roleId = discord.utils.get(guild.roles, name=role)
+
+		if roleId is None:
+			# Didn't find it, so log that and just return the role name.
+			# We can't make await calls in here, so store the logs for later.
+			internalLogs.append(f"Couldn't find role with name `{role}` in this server.")
+			return f"**@{role}**"
+
+		# We found the role, so we get the ID and return it with proper formatting.
+		return f"<@&{str(roleId.id)}>"
+
+	# Do the regex search/replace.
+	rules = re.sub(r'\{@(.+?)\}', doRoleReplace, rules)
+
+	# Similar to above, but now we're looking for channel names instead of roles.
+	def doChannelReplace(m):
+		channel = m.group(1)
+
+		# Try to get the channel ID.
+		channelId = discord.utils.get(guild.channels, name=channel)
+
+		if channelId is None:
+			# Didn't find it, so log that and just return the channel name.
+			# We can't make await calls in here, so store the logs for later.
+			internalLogs.append(f"Couldn't find channel with name `{channel}` in this server.")
+			return f"**#{channel}**"
+
+		# We found the channel, so we get the ID and return it with proper formatting.
+		return f"<#{str(channelId.id)}>"
+
+	# Do the regex search/replace.
+	rules = re.sub(r'\{#(.+?)\}', doChannelReplace, rules)
+
+	# Print out the logs from inside the function.
+	for l in internalLogs:
+		log(l)
+		await statusChannel.send(l)
+
+	# Split the rules at break points.
+	rules = rules.split("{br}")
+	message = f"Got {len(rules)} chunks of rules."
+	log(message)
+	await statusChannel.send(message)
+
+	# Check that none of the segments is longer than 2000 characters, which is Discords char limit.
+	for i in range(len(rules)):
+		if len(rules[i]) > 2000:
+			message = f"Rules section {i+1} is {len(rules[i])} characters long, but the limit is 2000 characters. Aborting."
+			log(message)
+			await statusChannel.send(message)
+			return
+
+	message = f"All rules chunks are valid."
+	log(message)
+	await statusChannel.send(message)
+
+	# If we're in push mode, clear the rules channel and post there.
+	if mode == _rules_mode_push:
+		log("Grabbing rules channel.")
+		rulesChannel = discord.utils.get(guild.text_channels, name=_rules_channel)
+
+		message = f"Attempting to purge rules channel."
+		log(message)
+		await statusChannel.send(message)
+
+		await rulesChannel.purge()
+
+		message = f"Purge complete, attempting to post to rules channel."
+		log(message)
+		await statusChannel.send(message)
+
+		for r in rules:
+			await rulesChannel.send(r)
+
+		await statusChannel.send("Rules posted to rules channel.")
+	else:
+		# Otherwise, just post them to the status channel.
+		await statusChannel.send("---BEGINNING RULES---")
+
+		for r in rules:
+			await statusChannel.send(r)
+
+		await statusChannel.send("---END OF RULES---")
+
+	message = "-Rules update complete.-"
+	log(message)
+	await statusChannel.send(message)
+
+
+	# TODO
+	# check if it works if the rules channel is made uneditable by onboarding setup
+
+# Handle errors for the UpdateRules command.
+@UpdateRules.error
+async def UpdateRules_error(ctx, error):
+	statusChannel = discord.utils.get(ctx.guild.text_channels, name=_status_messages_channel)
+
+	if isinstance(error, commands.MissingRequiredArgument):
+		message = "Error: The `UpdateRules` command requires a mode as an argument."
+		message += f"\n\nMode `{_rules_mode_test}` will output the rules to the #bot-messages channel for testing."
+		message += f"\nMode `{_rules_mode_push}` will clear the #rules channel and output the new rules to that channel."
+		log(message)
+		await statusChannel.send(message)
+	elif isinstance(error, commands.MissingRole):
+		message = "Error: Only Mysterium Staff can use the `UpdateRules` command."
+		log(message)
+		await statusChannel.send(message)
 
 log("Bot starting...")
 
