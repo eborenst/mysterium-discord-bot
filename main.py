@@ -265,6 +265,16 @@ async def UpdateRules(ctx, mode):
 		raise e
 		return
 
+	message = "Got the rules text. Beginining massaging session."
+	log(message)
+	await statusChannel.send(message)
+
+	# Replace any instances of '{%' with '<', to get around Wordpress being a pain.
+	rules = rules.replace("{%", "<")
+
+	# Now do the same with '%}' and '>'.
+	rules = rules.replace("%}", ">")
+
 	internalLogs = []
 
 	# Use regex to find role names and try to replace them with the role ID syntax.
@@ -337,7 +347,7 @@ async def UpdateRules(ctx, mode):
 
 		await statusChannel.send("---END OF RULES---")
 
-	message = "Rules update complete."
+	message = "-Rules update complete.-"
 	log(message)
 	await statusChannel.send(message)
 
