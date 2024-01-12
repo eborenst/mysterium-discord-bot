@@ -1,5 +1,6 @@
 import os
 import sys
+import re
 import discord
 from discord.ext import commands
 from urllib.request import urlopen
@@ -264,9 +265,31 @@ async def UpdateRules(ctx, mode):
 		raise e
 		return
 
-	# Search for the special string at the start of role mentions and replace with what
-	# Discord wants.
-	rules = rules.replace("{@&", "<@&")
+	internalLogs = []
+
+	# Use regex to find role names and try to replace them with the role ID syntax.
+	def doRoleReplace(m):
+		role = m.group(1)
+
+		# Try to get the role ID.
+		roleId = discord.utils.get(guild.roles, name=role)
+
+		if roleId is None:
+			# Didn't find it, so log that and just return the role name.
+			# We can't make await calls in here, so store the logs for later.
+			internalLogs.append(f"Couldn't find role with name `{role}` in this server.")
+			return f"**@{role}**"
+
+		# We found the role, so we get the ID and return it with proper formatting.
+		return f"<@&{str(roleId.id)}>"
+
+	# Do the regex search/replace.
+	rules = re.sub(r'\{@([\w ]+)\}', doRoleReplace, rules)
+
+	# Print out the logs from inside the function.
+	for l in internalLogs:
+		log(l)
+		await statusChannel.send(l)
 
 	# Split the rules at break points.
 	rules = rules.split("{br}")
